@@ -3,11 +3,11 @@
 ## 1.进入项目目录后，安装项目所需的依赖包。
 
 ```bash
-npm run dev
+npm install
 # or
-yarn dev
+yarn install
 # or
-pnpm dev
+pnpm install
 ```
 
 ## 2.安装完后，启动服务器
