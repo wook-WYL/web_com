@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可拖拽3D模型演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #151719;
+            /* 深灰色背景 - tailwind gray-900 */
+            color: #D9E3EA;
+            /* 浅灰色文字 - tailwind gray-200 */
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem 1rem;
+        }
+
+        h2 {
+            color: #D9E3EA;
+            margin-top: 0;
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .model-viewer {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background-color: #25282C;
+            /* 灰色背景 - tailwind gray-800 */
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin-bottom: 1.5rem;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .tip {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(37, 40, 44, 0.8);
+            /* 半透明灰色背景 - tailwind gray-800 */
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #D9E3EA;
+            /* 浅灰色文字 - tailwind gray-200 */
+        }
+
+        .instructions {
+            background: #25282C;
+            /* 灰色背景 - tailwind gray-800 */
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .instructions h2 {
+            color: #D9E3EA;
+            margin-top: 0;
+        }
+
+        .instructions ul {
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+            color: #9BA9B4;
+            /* 中灰色文字 - tailwind gray-400 */
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-top: 20px;
+            background: #5D5DFF;
+            /* 紫色背景 - tailwind purple-600 */
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .back-button:hover {
+            background: #4B4ACF;
+            /* 深紫色 - tailwind purple-700 */
+        }
+
+        .loading-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(37, 40, 44, 0.9);
+            /* 半透明灰色背景 - tailwind gray-800 */
+            z-index: 10;
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #D9E3EA;
+        }
+
+        .progress-bar {
+            width: 50%;
+            height: 20px;
+            background: #33363A;
+            /* 灰色 - tailwind gray-700 */
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress {
+            height: 100%;
+            background: #5D5DFF;
+            /* 紫色 - tailwind purple-600 */
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .error-message {
+            color: #e53e3e;
+            padding: 15px;
+            background: #25282C;
+            /* 灰色背景 - tailwind gray-800 */
+            border: 1px solid #e53e3e;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .model-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .model-button {
+            padding: 10px 15px;
+            background: #33363A;
+            /* 灰色 - tailwind gray-700 */
+            border: 1px solid #55595F;
+            /* 边框灰色 - tailwind gray-600 */
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #D9E3EA;
+            /* 浅灰色文字 - tailwind gray-200 */
+        }
+
+        .model-button:hover {
+            background: #55595F;
+            /* 灰色 hover - tailwind gray-600 */
+        }
+
+        .model-button.active {
+            background: #5D5DFF;
+            /* 紫色背景 - tailwind purple-600 */
+            color: white;
+            border-color: #4B4ACF;
+            /* 深紫色边框 - tailwind purple-700 */
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #D9E3EA;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="page-title">可拖拽3D模型演示</h1>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="model-controls">
+            <button class="model-button" data-model="CAR-2.obj" data-type="obj">整车模型 (未渲染)</button>
+            <button class="model-button" data-model="CAR-1.obj" data-type="obj">整车模型 (此为渲染模型浏览器存在崩溃风险)</button>
+            <button class="model-button active" data-model="cube" data-type="builtin">测试模型</button>
+        </div>
+
+        <div class="model-viewer">
+            <div class="loading-container" id="loadingContainer">
+                <div class="loading-text">正在加载模型...</div>
+                <div class="progress-bar">
+                    <div class="progress" id="progressBar"></div>
+                </div>
+                <div id="loadingInfo" style="margin-top: 10px; font-size: 14px; color: #D9E3EA;"></div>
+            </div>
+            <canvas id="canvas"></canvas>
+            <div class="tip">提示: 点击并拖动模型移动它，使用鼠标滚轮缩放，按住右键旋转视角</div>
+        </div>
+
+        <div class="instructions">
+            <h2>使用说明</h2>
+            <ul>
+                <li>点击并拖动模型以在水平平面上移动它</li>
+                <li>使用鼠标滚轮可以放大或缩小场景</li>
+                <li>按住鼠标右键并移动鼠标可以旋转视角</li>
+                <li>单击模型开始拖拽，松开鼠标按钮停止拖拽</li>
+                <li>可以使用上方按钮切换不同的模型测试</li>
+            </ul>
+        </div>
+
+        <a href="/" class="back-button">返回首页</a>
+    </div>
+
+    <!-- 使用ES模块导入Three.js -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+        // 获取DOM元素
+        const loadingContainer = document.getElementById('loadingContainer');
+        const progressBar = document.getElementById('progressBar');
+        const loadingInfo = document.getElementById('loadingInfo');
+        const errorMessage = document.getElementById('errorMessage');
+        const modelButtons = document.querySelectorAll('.model-button');
+
+        // 显示错误信息的函数
+        function showError(message) {
+            errorMessage.textContent = `错误: ${message}`;
+            errorMessage.style.display = 'block';
+            loadingContainer.style.display = 'none';
+
+            // 记录详细错误信息和环境
+            console.error(`模型加载错误: ${message}`);
+            console.log(`Three.js版本: ${THREE.REVISION}`);
+            console.log(`浏览器: ${navigator.userAgent}`);
+        }
+
+        // 更新加载进度
+        function updateProgress(percent, message = '') {
+            progressBar.style.width = `${percent}%`;
+            if (message) {
+                loadingInfo.textContent = message;
+            }
+        }
+
+        try {
+            // 场景初始化
+            const canvas = document.getElementById('canvas');
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.shadowMap.enabled = true;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x25282C); // 灰色背景 - tailwind gray-800
+
+            const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+
+            // 添加控制器
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // 添加光源
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
+
+            // 添加网格地面
+            const gridHelper = new THREE.GridHelper(10, 10, 0x555555, 0x333333); // 更暗的网格颜色
+            scene.add(gridHelper);
+
+            // 创建一个平面作为拖拽基准面
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            const intersectPoint = new THREE.Vector3();
+
+            // 添加默认几何体，在模型加载前可以看到一些东西
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color: 0x5D5DFF }); // 紫色 - tailwind purple-600
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(0, 0.5, 0);
+            cube.castShadow = true;
+            cube.receiveShadow = true;
+            scene.add(cube);
+
+            // 模型变量
+            let model = null;
+            let isDragging = false;
+            let modelOffset = new THREE.Vector3();
+
+            // 清除当前模型
+            function clearCurrentModel() {
+                // 移除事件监听器
+                canvas.removeEventListener('mousedown', onMouseDown);
+                canvas.removeEventListener('mouseup', onMouseUp);
+                canvas.removeEventListener('mousemove', onMouseMove);
+
+                // 从场景中移除模型
+                if (model) {
+                    scene.remove(model);
+                    model = null;
+                }
+            }
+
+            // 加载模型函数
+            function loadModel(modelFile, modelType) {
+                // 先清除当前模型
+                clearCurrentModel();
+
+                // 如果默认立方体存在，先移除它
+                if (cube && cube.parent) {
+                    scene.remove(cube);
+                }
+
+                // 显示加载界面
+                errorMessage.style.display = 'none';
+                loadingContainer.style.display = 'flex';
+                progressBar.style.width = '0%';
+
+                console.log(`开始加载模型: ${modelFile}, 类型: ${modelType}`);
+
+                // 记录加载开始时间
+                const startTime = Date.now();
+
+                if (modelType === 'builtin') {
+                    // 直接使用内置几何体
+                    updateProgress(50, "创建内置模型...");
+
+                    const builtinGeometry = new THREE.BoxGeometry(1, 1, 1);
+                    const builtinMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x5D5DFF, // 紫色 - tailwind purple-600
+                        metalness: 0.3,
+                        roughness: 0.2
+                    });
+                    model = new THREE.Mesh(builtinGeometry, builtinMaterial);
+                    model.position.set(0, 0.5, 0);
+                    model.castShadow = true;
+                    model.receiveShadow = true;
+                    scene.add(model);
+
+                    // 添加事件监听器
+                    canvas.addEventListener('mousedown', onMouseDown);
+                    canvas.addEventListener('mouseup', onMouseUp);
+                    canvas.addEventListener('mousemove', onMouseMove);
+
+                    updateProgress(100, "内置模型创建完成");
+
+                    // 隐藏加载界面
+                    setTimeout(() => {
+                        loadingContainer.style.display = 'none';
+                    }, 500);
+
+                    return;
+                }
+
+                // 模型路径
+                const modelPath = `/models/${modelFile}`;
+                console.log(`尝试加载模型: ${modelPath}, 类型: ${modelType}`);
+                loadingInfo.textContent = `正在加载模型: ${modelFile}`;
+                updateProgress(10, "准备加载器...");
+
+                if (modelType === 'gltf') {
+                    // 加载GLTF模型
+                    updateProgress(20, "开始加载GLTF模型...");
+
+                    // 创建DRACO解码器，帮助解码压缩的GLTF
+                    const dracoLoader = new DRACOLoader();
+                    dracoLoader.setDecoderPath('https://unpkg.com/three@0.161.0/examples/jsm/libs/draco/');
+
+                    const loader = new GLTFLoader();
+                    loader.setDRACOLoader(dracoLoader);
+
+                    console.log("GLTF加载器创建成功, 开始加载:", modelPath);
+
+                    // 尝试使用fetch API先检查文件是否存在
+                    fetch(modelPath, { method: 'HEAD' })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`模型文件无法访问: HTTP ${response.status}`);
+                            }
+                            console.log("模型文件检查通过，开始加载GLTF/GLB模型");
+
+                            // 先检查文件内容类型
+                            console.log("模型Content-Type:", response.headers.get('Content-Type'));
+
+                            // 显示额外的提示信息
+                            updateProgress(20, "模型文件可访问，准备加载GLB数据...");
+                            loadingInfo.textContent = "模型文件检查通过，尝试加载3D内容。如果一直没反应，可能是模型格式问题。";
+
+                            // 加载GLTF模型
+                            loader.load(
+                                modelPath,
+                                // 成功回调
+                                (gltf) => {
+                                    console.log("GLTF模型成功加载:", gltf);
+                                    updateProgress(100, "模型加载完成!");
+                                    const loadTime = (Date.now() - startTime) / 1000;
+                                    console.log(`模型加载成功，耗时: ${loadTime.toFixed(2)}秒`);
+
+                                    // 添加加载的模型
+                                    model = gltf.scene;
+
+                                    // 详细打印模型信息
+                                    console.log("模型信息:", model);
+                                    console.log("模型结构:", JSON.stringify(model.toJSON()));
+                                    console.log("模型子对象数量:", model.children.length);
+
+                                    // 检查模型文件的详细结构
+                                    console.log("GLTF 详细信息:");
+                                    console.log("- 场景:", gltf.scene);
+                                    console.log("- 场景数组:", gltf.scenes);
+                                    console.log("- 相机:", gltf.cameras);
+                                    console.log("- 动画:", gltf.animations);
+
+                                    // 递归打印模型结构
+                                    function inspectObject(obj, prefix = '') {
+                                        console.log(`${prefix}对象: ${obj.name || '无名称'}, 类型: ${obj.type || '未知'}`);
+                                        console.log(`${prefix}位置: X=${obj.position.x.toFixed(2)}, Y=${obj.position.y.toFixed(2)}, Z=${obj.position.z.toFixed(2)}`);
+                                        console.log(`${prefix}可见性: ${obj.visible}`);
+                                        if (obj.geometry) {
+                                            console.log(`${prefix}几何体: ${obj.geometry.type}, 顶点数: ${obj.geometry.attributes && obj.geometry.attributes.position ? obj.geometry.attributes.position.count : '未知'}`);
+                                        }
+                                        if (obj.material) {
+                                            console.log(`${prefix}材质: ${obj.material.type}, 颜色: ${obj.material.color ? `#${obj.material.color.getHexString()}` : '无'}`);
+                                        }
+                                        if (obj.children && obj.children.length > 0) {
+                                            console.log(`${prefix}子对象数量: ${obj.children.length}`);
+                                            obj.children.forEach((child, index) => {
+                                                console.log(`${prefix}子对象 #${index + 1}:`);
+                                                inspectObject(child, prefix + '  ');
+                                            });
+                                        } else {
+                                            console.log(`${prefix}无子对象`);
+                                        }
+                                    }
+
+                                    console.log("模型层级结构详细信息:");
+                                    inspectObject(model);
+
+                                    // 如果模型没有子对象，可能是空模型
+                                    if (model.children.length === 0) {
+                                        console.warn("警告：加载的模型没有子对象！");
+                                        // 创建一个视觉提示
+                                        const helperGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                                        const helperMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+                                        const helper = new THREE.Mesh(helperGeometry, helperMaterial);
+                                        model.add(helper);
+                                    }
+
+                                    // 调整模型比例和位置
+                                    // 尝试确定模型大小
+                                    const box = new THREE.Box3().setFromObject(model);
+                                    const size = box.getSize(new THREE.Vector3());
+                                    const maxDim = Math.max(size.x, size.y, size.z);
+
+                                    if (maxDim < 0.1) {
+                                        // 模型可能太小，放大它
+                                        model.scale.set(10, 10, 10);
+                                        console.log("模型太小，已自动放大");
+                                    } else if (maxDim > 10) {
+                                        // 模型可能太大，缩小它
+                                        model.scale.set(0.1, 0.1, 0.1);
+                                        console.log("模型太大，已自动缩小");
+                                    } else {
+                                        // 正常大小
+                                        model.scale.set(0.5, 0.5, 0.5);
+                                    }
+
+                                    // 计算中心点并将模型放置在地面上
+                                    const center = box.getCenter(new THREE.Vector3());
+                                    model.position.set(-center.x, -box.min.y, -center.z);
+
+                                    scene.add(model);
+
+                                    // 设置模型阴影
+                                    model.traverse((child) => {
+                                        if (child.isMesh) {
+                                            child.castShadow = true;
+                                            child.receiveShadow = true;
+                                            console.log(`网格: ${child.name}, 材质: ${child.material ? child.material.type : 'none'}`);
+
+                                            // 确保材质正确渲染
+                                            if (child.material) {
+                                                // 确保所有材质都有合理的属性
+                                                if (Array.isArray(child.material)) {
+                                                    child.material.forEach(mat => {
+                                                        mat.side = THREE.DoubleSide; // 双面渲染
+                                                        mat.needsUpdate = true;
+                                                    });
+                                                } else {
+                                                    child.material.side = THREE.DoubleSide;
+                                                    child.material.needsUpdate = true;
+                                                }
+                                            }
+                                        }
+                                    });
+
+                                    // 为模型添加拖拽事件
+                                    canvas.addEventListener('mousedown', onMouseDown);
+                                    canvas.addEventListener('mouseup', onMouseUp);
+                                    canvas.addEventListener('mousemove', onMouseMove);
+
+                                    // 隐藏加载界面
+                                    setTimeout(() => {
+                                        loadingContainer.style.display = 'none';
+                                    }, 500);
+                                },
+                                // 进度回调
+                                (xhr) => {
+                                    console.log(`加载进度: ${xhr.loaded} / ${xhr.total || '未知'}`);
+                                    if (xhr.lengthComputable) {
+                                        const percent = (xhr.loaded / xhr.total) * 80 + 20;
+                                        updateProgress(percent, `已加载 ${Math.floor(xhr.loaded / 1024)} KB / ${Math.floor(xhr.total / 1024)} KB`);
+                                    } else {
+                                        updateProgress(50, `已加载 ${Math.floor(xhr.loaded / 1024)} KB`);
+                                    }
+                                },
+                                // 错误回调
+                                (error) => {
+                                    console.error('模型加载错误:', error);
+                                    console.error('模型路径:', modelPath);
+                                    console.log('模型加载环境:', navigator.userAgent);
+
+                                    // 尝试再次检查文件
+                                    fetch(modelPath)
+                                        .then(response => {
+                                            if (!response.ok) {
+                                                throw new Error(`HTTP 错误 ${response.status}`);
+                                            }
+                                            return response.blob();
+                                        })
+                                        .then(blob => {
+                                            console.log("模型文件大小:", blob.size, "字节");
+                                            console.log("模型文件类型:", blob.type);
+
+                                            if (blob.size < 100) {
+                                                showError(`模型文件似乎太小 (${blob.size} 字节)，可能不是有效的GLB文件`);
+                                            } else {
+                                                showError(`模型文件存在 (${blob.size} 字节)，但GLB解析失败: ${error.message || '未知错误'}`);
+                                            }
+                                        })
+                                        .catch(fetchError => {
+                                            showError(`无法加载模型: ${error.message || '未知错误'}, 并且文件检查失败: ${fetchError.message}`);
+                                        })
+                                        .finally(() => {
+                                            // 创建一个替代几何体
+                                            const errorGeometry = new THREE.BoxGeometry(1, 1, 1);
+                                            const errorMaterial = new THREE.MeshStandardMaterial({
+                                                color: 0xe53e3e,
+                                                wireframe: true
+                                            });
+                                            model = new THREE.Mesh(errorGeometry, errorMaterial);
+                                            model.position.set(0, 0.5, 0);
+                                            scene.add(model);
+
+                                            // 添加事件监听器
+                                            canvas.addEventListener('mousedown', onMouseDown);
+                                            canvas.addEventListener('mouseup', onMouseUp);
+                                            canvas.addEventListener('mousemove', onMouseMove);
+
+                                            // 隐藏加载界面
+                                            setTimeout(() => {
+                                                loadingContainer.style.display = 'none';
+                                            }, 500);
+                                        });
+                                }
+                            );
+                        })
+                        .catch(error => {
+                            console.error("模型文件检查失败:", error);
+                            showError(`模型文件检查失败: ${error.message}`);
+
+                            // 创建一个替代几何体
+                            const errorGeometry = new THREE.BoxGeometry(1, 1, 1);
+                            const errorMaterial = new THREE.MeshStandardMaterial({
+                                color: 0xe53e3e,
+                                wireframe: true
+                            });
+                            model = new THREE.Mesh(errorGeometry, errorMaterial);
+                            model.position.set(0, 0.5, 0);
+                            scene.add(model);
+
+                            // 添加事件监听器
+                            canvas.addEventListener('mousedown', onMouseDown);
+                            canvas.addEventListener('mouseup', onMouseUp);
+                            canvas.addEventListener('mousemove', onMouseMove);
+
+                            // 隐藏加载界面
+                            setTimeout(() => {
+                                loadingContainer.style.display = 'none';
+                            }, 500);
+                        });
+                } else if (modelType === 'json') {
+                    // 加载JSON模型
+                    updateProgress(20, "开始加载JSON模型...");
+
+                    fetch(modelPath)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP 错误! 状态: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(json => {
+                            updateProgress(70, "解析JSON数据...");
+
+                            // 创建对象
+                            const loader = new THREE.ObjectLoader();
+                            model = loader.parse(json);
+
+                            model.position.set(0, 0, 0);
+                            scene.add(model);
+
+                            // 设置模型阴影
+                            model.traverse((child) => {
+                                if (child.isMesh) {
+                                    child.castShadow = true;
+                                    child.receiveShadow = true;
+                                }
+                            });
+
+                            // 为模型添加拖拽事件
+                            canvas.addEventListener('mousedown', onMouseDown);
+                            canvas.addEventListener('mouseup', onMouseUp);
+                            canvas.addEventListener('mousemove', onMouseMove);
+
+                            updateProgress(100, "模型加载完成!");
+
+                            // 隐藏加载界面
+                            setTimeout(() => {
+                                loadingContainer.style.display = 'none';
+                            }, 500);
+                        })
+                        .catch(error => {
+                            console.error('JSON模型加载错误:', error);
+                            showError(`加载JSON模型失败: ${error.message}`);
+                        });
+                } else if (modelType === 'obj') {
+                    updateProgress(20, "开始加载OBJ模型...");
+
+                    // 首先尝试加载材质文件
+                    const mtlLoader = new MTLLoader();
+                    const mtlFile = modelPath.replace('.obj', '.mtl');
+
+                    // 对大型模型进行特殊处理
+                    const isLargeModel = modelFile === 'CAR-1.obj' || modelFile === 'CAR.obj';
+                    if (isLargeModel) {
+                        updateProgress(25, "准备加载大型模型，这可能需要一些时间...");
+                    }
+
+                    mtlLoader.load(
+                        mtlFile,
+                        (materials) => {
+                            updateProgress(40, "材质加载完成，开始加载OBJ模型...");
+                            if (isLargeModel) {
+                                updateProgress(40, "材质加载完成，正在加载大型车身模型，请耐心等待...");
+                            }
+
+                            materials.preload();
+
+                            const objLoader = new OBJLoader();
+                            objLoader.setMaterials(materials);
+
+                            objLoader.load(
+                                modelPath,
+                                (object) => {
+                                    updateProgress(100, "OBJ模型加载完成!");
+
+                                    model = object;
+                                    model.position.set(0, 0, 0);
+
+                                    // 自动调整大型模型的缩放比例
+                                    if (isLargeModel) {
+                                        model.scale.set(0.01, 0.01, 0.01); // 大型汽车模型通常需要缩小
+                                    } else {
+                                        model.scale.set(1, 1, 1);
+                                    }
+
+                                    scene.add(model);
+
+                                    // 设置模型阴影
+                                    model.traverse((child) => {
+                                        if (child.isMesh) {
+                                            child.castShadow = true;
+                                            child.receiveShadow = true;
+                                        }
+                                    });
+
+                                    // 计算包围盒并居中模型
+                                    const box = new THREE.Box3().setFromObject(model);
+                                    const center = box.getCenter(new THREE.Vector3());
+                                    model.position.set(-center.x, -box.min.y, -center.z);
+
+                                    // 添加拖拽事件
+                                    canvas.addEventListener('mousedown', onMouseDown);
+                                    canvas.addEventListener('mouseup', onMouseUp);
+                                    canvas.addEventListener('mousemove', onMouseMove);
+
+                                    // 隐藏加载界面
+                                    setTimeout(() => {
+                                        loadingContainer.style.display = 'none';
+                                    }, 500);
+                                },
+                                (xhr) => {
+                                    const percent = 40 + (xhr.loaded / xhr.total) * 60;
+                                    if (isLargeModel) {
+                                        const loadedMB = Math.floor(xhr.loaded / (1024 * 1024));
+                                        const totalMB = Math.floor(xhr.total / (1024 * 1024));
+                                        updateProgress(percent, `大型模型加载中: ${loadedMB} MB / ${totalMB} MB`);
+                                    } else {
+                                        updateProgress(percent, `OBJ加载中: ${Math.floor(xhr.loaded / 1024)} KB / ${Math.floor(xhr.total / 1024)} KB`);
+                                    }
+                                },
+                                (error) => {
+                                    console.error('OBJ加载错误:', error);
+                                    showError(`OBJ模型加载失败: ${error.message}`);
+                                }
+                            );
+                        },
+                        (xhr) => {
+                            const percent = (xhr.loaded / xhr.total) * 40;
+                            if (isLargeModel) {
+                                const loadedMB = Math.floor(xhr.loaded / (1024 * 1024));
+                                const totalMB = Math.floor(xhr.total / (1024 * 1024));
+                                updateProgress(percent, `大型模型材质加载中: ${loadedMB} MB / ${totalMB} MB`);
+                            } else {
+                                updateProgress(percent, `材质加载中: ${Math.floor(xhr.loaded / 1024)} KB / ${Math.floor(xhr.total / 1024)} KB`);
+                            }
+                        },
+                        (error) => {
+                            console.error('MTL加载错误:', error);
+                            // 尝试不使用材质加载OBJ
+                            updateProgress(30, "材质加载失败，尝试直接加载OBJ模型...");
+
+                            const objLoader = new OBJLoader();
+
+                            objLoader.load(
+                                modelPath,
+                                (object) => {
+                                    updateProgress(100, "OBJ模型加载完成 (无材质)!");
+
+                                    model = object;
+                                    model.position.set(0, 0, 0);
+
+                                    // 自动调整大型模型的缩放比例
+                                    if (isLargeModel) {
+                                        model.scale.set(0.01, 0.01, 0.01); // 大型汽车模型通常需要缩小
+                                    }
+
+                                    // 给模型添加基本材质
+                                    model.traverse((child) => {
+                                        if (child.isMesh) {
+                                            child.material = new THREE.MeshStandardMaterial({
+                                                color: 0x9BA9B4, // 灰色 - tailwind gray-400
+                                                metalness: 0.2,
+                                                roughness: 0.8
+                                            });
+                                            child.castShadow = true;
+                                            child.receiveShadow = true;
+                                        }
+                                    });
+
+                                    // 计算包围盒并居中模型
+                                    const box = new THREE.Box3().setFromObject(model);
+                                    const center = box.getCenter(new THREE.Vector3());
+                                    model.position.set(-center.x, -box.min.y, -center.z);
+
+                                    scene.add(model);
+
+                                    // 添加拖拽事件
+                                    canvas.addEventListener('mousedown', onMouseDown);
+                                    canvas.addEventListener('mouseup', onMouseUp);
+                                    canvas.addEventListener('mousemove', onMouseMove);
+
+                                    // 隐藏加载界面
+                                    setTimeout(() => {
+                                        loadingContainer.style.display = 'none';
+                                    }, 500);
+                                },
+                                (xhr) => {
+                                    const percent = 30 + (xhr.loaded / xhr.total) * 70;
+                                    if (isLargeModel) {
+                                        const loadedMB = Math.floor(xhr.loaded / (1024 * 1024));
+                                        const totalMB = Math.floor(xhr.total / (1024 * 1024));
+                                        updateProgress(percent, `大型模型加载中: ${loadedMB} MB / ${totalMB} MB`);
+                                    } else {
+                                        updateProgress(percent, `OBJ加载中: ${Math.floor(xhr.loaded / 1024)} KB / ${Math.floor(xhr.total / 1024)} KB`);
+                                    }
+                                },
+                                (error) => {
+                                    console.error('OBJ加载错误:', error);
+                                    showError(`OBJ模型加载失败: ${error.message}`);
+                                }
+                            );
+                        }
+                    );
+                }
+            }
+
+            // 鼠标事件处理函数
+            function onMouseDown(event) {
+                // 获取鼠标位置（归一化坐标）
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / canvas.clientHeight) * 2 + 1;
+
+                // 检测与模型的相交
+                raycaster.setFromCamera(mouse, camera);
+                const modelToCheck = model;
+
+                if (!modelToCheck) return;
+
+                const intersects = raycaster.intersectObject(modelToCheck, true);
+
+                if (intersects.length > 0) {
+                    isDragging = true;
+
+                    // 计算地面与射线的交点
+                    const planeIntersect = new THREE.Vector3();
+                    raycaster.ray.intersectPlane(plane, planeIntersect);
+
+                    // 记录偏移量（模型位置与点击位置的差）
+                    modelOffset.copy(modelToCheck.position).sub(planeIntersect);
+
+                    // 停止轨道控制器，避免拖拽时同时旋转视角
+                    controls.enabled = false;
+                }
+            }
+
+            function onMouseUp() {
+                isDragging = false;
+                controls.enabled = true;
+            }
+
+            function onMouseMove(event) {
+                if (!isDragging || !model) return;
+
+                // 更新鼠标位置
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / canvas.clientHeight) * 2 + 1;
+
+                // 更新射线
+                raycaster.setFromCamera(mouse, camera);
+
+                // 计算地面与射线的交点
+                const planeIntersect = new THREE.Vector3();
+                raycaster.ray.intersectPlane(plane, planeIntersect);
+
+                // 更新模型位置，保持原来的偏移量
+                model.position.copy(planeIntersect).add(modelOffset);
+            }
+
+            // 处理窗口大小调整
+            function onWindowResize() {
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize(width, height);
+            }
+
+            window.addEventListener('resize', onWindowResize);
+
+            // 初始化大小
+            onWindowResize();
+
+            // 渲染循环
+            function animate() {
+                requestAnimationFrame(animate);
+
+                // 更新控制器
+                controls.update();
+
+                // 渲染场景
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            // 为模型选择按钮添加事件
+            modelButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // 移除其他按钮的active类
+                    modelButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    // 获取模型信息并加载
+                    const modelFile = button.getAttribute('data-model');
+                    const modelType = button.getAttribute('data-type');
+                    loadModel(modelFile, modelType);
+                });
+            });
+
+            // 初始加载内置立方体
+            loadModel('cube', 'builtin');
+
+        } catch (error) {
+            console.error('初始化错误:', error);
+            showError(`初始化3D场景失败: ${error.message}`);
+        }
+    </script>
+</body>
+
+</html>

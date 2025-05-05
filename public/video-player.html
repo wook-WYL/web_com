@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频播放</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #111827;
+            /* 与主页一致的深色背景 */
+            color: #f9fafb;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .video-player-container {
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 1.5rem;
+            position: relative;
+            height: 80vh;
+            /* 使视频容器更高 */
+            max-height: 800px;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        .video-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .video-button {
+            padding: 10px 15px;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #f9fafb;
+        }
+
+        .video-button:hover {
+            background: #374151;
+        }
+
+        .video-button.active {
+            background: #3B82F6;
+            color: white;
+            border-color: #2563EB;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-top: 20px;
+            background: #3B82F6;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .back-button:hover {
+            background: #2563EB;
+        }
+
+        /* 全屏视频样式 */
+        .fullscreen-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            background-color: #000;
+            display: none;
+        }
+
+        .fullscreen-video video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .close-fullscreen {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .close-fullscreen:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 5px solid #fff;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 视频播放器自定义控制条 */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .video-player-container:hover .custom-controls {
+            opacity: 1;
+        }
+
+        .custom-controls button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.3);
+            position: relative;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        .progress {
+            height: 100%;
+            background: #3B82F6;
+            width: 0%;
+        }
+
+        .time-display {
+            color: white;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="video-controls">
+            <button class="video-button active" data-video="video_3.mp4">答辩演示视频</button>
+            <button class="video-button" data-video="video_5.mp4">实物展示视频</button>
+            <button class="video-button" data-video="video_2.mp4">系统展示视频</button>
+        </div>
+
+        <div class="video-player-container">
+            <video id="video-player" class="video-player" controls preload="metadata">
+                <source src="/videos/video_3.mp4" type="video/mp4">
+                您的浏览器不支持HTML5视频。
+            </video>
+
+            <div class="loading-overlay" id="loading-overlay">
+                <div class="spinner"></div>
+            </div>
+
+            <div class="custom-controls" id="custom-controls">
+                <button id="play-pause-btn">▶</button>
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress" id="progress"></div>
+                </div>
+                <span class="time-display" id="time-display">00:00 / 00:00</span>
+                <button id="mute-btn">🔊</button>
+                <button id="fullscreen-btn">⛶</button>
+            </div>
+        </div>
+
+        <div class="fullscreen-video" id="fullscreen-container">
+            <button class="close-fullscreen" id="close-fullscreen">×</button>
+            <video id="fullscreen-video" controls>
+                <source src="/videos/video_3.mp4" type="video/mp4">
+            </video>
+        </div>
+
+        <a href="/" class="back-button">返回首页</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 获取DOM元素
+            const videoPlayer = document.getElementById('video-player');
+            const fullscreenVideo = document.getElementById('fullscreen-video');
+            const fullscreenContainer = document.getElementById('fullscreen-container');
+            const closeFullscreenBtn = document.getElementById('close-fullscreen');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const videoButtons = document.querySelectorAll('.video-button');
+            const loadingOverlay = document.getElementById('loading-overlay');
+
+            // 自定义控制元素
+            const customControls = document.getElementById('custom-controls');
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            const progressBar = document.getElementById('progress-bar');
+            const progress = document.getElementById('progress');
+            const timeDisplay = document.getElementById('time-display');
+            const muteBtn = document.getElementById('mute-btn');
+
+            // 视频信息 - 可以扩展添加更多视频
+            const videoInfo = {
+                'video_3.mp4': {
+                    title: 'PPT演示视频'
+                },
+                'video_1.mp4': {
+                    title: '产品介绍视频'
+                },
+                'video_2.mp4': {
+                    title: '使用教程视频'
+                }
+            };
+
+            // 显示加载overlay
+            function showLoading() {
+                loadingOverlay.style.display = 'flex';
+            }
+
+            // 隐藏加载overlay
+            function hideLoading() {
+                loadingOverlay.style.display = 'none';
+            }
+
+            // 格式化时间为 MM:SS 格式
+            function formatTime(seconds) {
+                const minutes = Math.floor(seconds / 60);
+                seconds = Math.floor(seconds % 60);
+                return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // 更新视频进度
+            function updateProgress() {
+                if (videoPlayer.duration) {
+                    const percentage = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+                    progress.style.width = `${percentage}%`;
+                    timeDisplay.textContent = `${formatTime(videoPlayer.currentTime)} / ${formatTime(videoPlayer.duration)}`;
+                }
+            }
+
+            // 切换视频
+            function switchVideo(videoFileName) {
+                showLoading();
+
+                // 更新视频源
+                videoPlayer.pause();
+                videoPlayer.src = `/videos/${videoFileName}`;
+                fullscreenVideo.src = `/videos/${videoFileName}`;
+
+                // 重置进度条
+                progress.style.width = '0%';
+
+                // 更新页面标题
+                const info = videoInfo[videoFileName] || { title: videoFileName };
+                document.title = info.title;
+
+                // 加载并播放
+                videoPlayer.load();
+                // 自动播放可能被浏览器阻止
+                videoPlayer.play().catch(e => {
+                    console.log('自动播放被阻止:', e);
+                    hideLoading();
+                });
+            }
+
+            // 初始显示加载中
+            showLoading();
+
+            // 视频加载事件
+            videoPlayer.addEventListener('canplay', function () {
+                hideLoading();
+            });
+
+            // 视频错误处理
+            videoPlayer.addEventListener('error', function () {
+                hideLoading();
+                alert('视频加载失败，请检查网络连接或稍后再试');
+            });
+
+            // 视频控制 - 播放/暂停
+            playPauseBtn.addEventListener('click', function () {
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                    playPauseBtn.textContent = '⏸';
+                } else {
+                    videoPlayer.pause();
+                    playPauseBtn.textContent = '▶';
+                }
+            });
+
+            // 视频播放状态更新
+            videoPlayer.addEventListener('play', function () {
+                playPauseBtn.textContent = '⏸';
+            });
+
+            videoPlayer.addEventListener('pause', function () {
+                playPauseBtn.textContent = '▶';
+            });
+
+            // 进度条点击事件
+            progressBar.addEventListener('click', function (e) {
+                const pos = (e.pageX - this.getBoundingClientRect().left) / this.offsetWidth;
+                videoPlayer.currentTime = pos * videoPlayer.duration;
+            });
+
+            // 静音按钮
+            muteBtn.addEventListener('click', function () {
+                videoPlayer.muted = !videoPlayer.muted;
+                muteBtn.textContent = videoPlayer.muted ? '🔇' : '🔊';
+            });
+
+            // 监听视频时间更新
+            videoPlayer.addEventListener('timeupdate', updateProgress);
+
+            // 全屏按钮点击
+            fullscreenBtn.addEventListener('click', function () {
+                fullscreenContainer.style.display = 'block';
+                fullscreenVideo.currentTime = videoPlayer.currentTime;
+                fullscreenVideo.play();
+                document.body.style.overflow = 'hidden'; // 防止滚动
+            });
+
+            // 关闭全屏
+            closeFullscreenBtn.addEventListener('click', function () {
+                fullscreenContainer.style.display = 'none';
+                videoPlayer.currentTime = fullscreenVideo.currentTime;
+                document.body.style.overflow = ''; // 恢复滚动
+            });
+
+            // 视频按钮点击切换视频
+            videoButtons.forEach(button => {
+                button.addEventListener('click', function () {
+                    // 移除其他按钮的active类
+                    videoButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // 切换视频
+                    const videoFileName = this.getAttribute('data-video');
+                    switchVideo(videoFileName);
+                });
+            });
+
+            // 初始化
+            videoPlayer.addEventListener('loadedmetadata', function () {
+                hideLoading();
+            });
+
+            // 视频结束时重置播放按钮
+            videoPlayer.addEventListener('ended', function () {
+                playPauseBtn.textContent = '▶';
+            });
+        });
+    </script>
+</body>
+
+</html>
